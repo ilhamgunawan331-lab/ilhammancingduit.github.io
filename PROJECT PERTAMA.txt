@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>QRIS Recon Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body {
+  margin:0;
+  font-family: Arial;
+  background:#2b0000;
+  color:#fff;
+}
+
+.header {
+  padding:20px;
+  font-size:28px;
+  color:gold;
+  border-bottom:1px solid #444;
+}
+
+.container {
+  display:grid;
+  grid-template-columns:2fr 1fr;
+  gap:20px;
+  padding:20px;
+}
+
+.card {
+  background:#3b0000;
+  border:1px solid gold;
+  border-radius:10px;
+  padding:15px;
+}
+
+input {
+  width:100%;
+  padding:8px;
+  margin-top:8px;
+  background:#2b0000;
+  border:1px solid gold;
+  color:white;
+}
+
+button {
+  width:100%;
+  padding:10px;
+  margin-top:10px;
+  background:gold;
+  border:none;
+  cursor:pointer;
+}
+
+.stats {
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:10px;
+  margin-top:15px;
+}
+
+.stat {
+  background:#4a0000;
+  padding:10px;
+  border-radius:8px;
+  border:1px solid gold;
+}
+
+.table {
+  max-height:150px;
+  overflow:auto;
+  background:#1f0000;
+  padding:10px;
+  margin-top:10px;
+}
+
+canvas {
+  margin-top:20px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">QRIS RECONCILER - FULL</div>
+
+<div class="container">
+
+<!-- LEFT -->
+<div>
+
+<div class="card">
+<h3>Import Data</h3>
+<input type="file" id="fileAdmin">
+<input type="file" id="fileQris">
+<button onclick="processData()">Proses Data</button>
+</div>
+
+<div class="stats">
+<div class="stat">Klop: <span id="klop">0</span></div>
+<div class="stat">Selisih: <span id="selisih">0</span></div>
+<div class="stat">Hilang: <span id="hilang">0</span></div>
+<div class="stat">Total: <span id="total">0</span></div>
+</div>
+
+<div class="card">
+<h3>Hasil Matching</h3>
+<div class="table" id="result"></div>
+</div>
+
+<canvas id="chart"></canvas>
+
+</div>
+
+<!-- RIGHT FILTER -->
+<div class="card">
+<h3>Filter</h3>
+
+<input type="text" id="search" placeholder="Cari ID..." onkeyup="applyFilter()">
+
+<input type="number" id="min" placeholder="Min Nominal">
+<input type="number" id="max" placeholder="Max Nominal">
+
+<button onclick="applyFilter()">Apply Filter</button>
+
+<button onclick="exportData()">Export CSV</button>
+</div>
+
+</div>
+
+<script>
+let adminData = [];
+let qrisData = [];
+let resultData = [];
+
+function readCSV(file, callback){
+  let reader = new FileReader();
+  reader.onload = e => {
+    let rows = e.target.result.split("\n").map(r => r.trim());
+    callback(rows);
+  };
+  reader.readAsText(file);
+}
+
+function processData(){
+  let f1 = document.getElementById("fileAdmin").files[0];
+  let f2 = document.getElementById("fileQris").files[0];
+
+  if(!f1 || !f2) return alert("Upload kedua file!");
+
+  readCSV(f1, data1 => {
+    adminData = data1;
+
+    readCSV(f2, data2 => {
+      qrisData = data2;
+
+      matchData();
+    });
+  });
+}
+
+function matchData(){
+  resultData = [];
+
+  let klop=0, selisih=0, hilang=0;
+
+  adminData.forEach(a=>{
+    if(qrisData.includes(a)){
+      resultData.push({id:a, status:"KLOP"});
+      klop++;
+    } else {
+      resultData.push({id:a, status:"HILANG"});
+      hilang++;
+    }
+  });
+
+  qrisData.forEach(q=>{
+    if(!adminData.includes(q)){
+      resultData.push({id:q, status:"SELISIH"});
+      selisih++;
+    }
+  });
+
+  document.getElementById("klop").innerText = klop;
+  document.getElementById("selisih").innerText = selisih;
+  document.getElementById("hilang").innerText = hilang;
+  document.getElementById("total").innerText = resultData.length;
+
+  renderTable(resultData);
+  renderChart(klop, selisih, hilang);
+}
+
+function renderTable(data){
+  let html = "";
+  data.forEach(d=>{
+    html += `${d.id} - ${d.status}<br>`;
+  });
+  document.getElementById("result").innerHTML = html;
+}
+
+function applyFilter(){
+  let key = document.getElementById("search").value.toLowerCase();
+
+  let filtered = resultData.filter(d => d.id.toLowerCase().includes(key));
+
+  renderTable(filtered);
+}
+
+function renderChart(klop, selisih, hilang){
+  new Chart(document.getElementById("chart"), {
+    type: 'doughnut',
+    data: {
+      labels: ["Klop","Selisih","Hilang"],
+      datasets: [{
+        data: [klop, selisih, hilang]
+      }]
+    }
+  });
+}
+
+function exportData(){
+  let csv = "ID,STATUS\n";
+  resultData.forEach(d=>{
+    csv += `${d.id},${d.status}\n`;
+  });
+
+  let blob = new Blob([csv], {type:"text/csv"});
+  let a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "hasil.csv";
+  a.click();
+}
+</script>
+
+</body>
+</html>
